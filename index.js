@@ -1,5 +1,7 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = 3000;
@@ -116,7 +118,7 @@ app.get('/api/skills', (req, res) => {
 });
 
 // POST contact form
-app.post('/api/contact', (req, res) => {
+app.post('/api/contact', async (req, res) => {
   const { name, email, message } = req.body;
 
   if (!name || !email || !message) {
@@ -135,10 +137,44 @@ app.post('/api/contact', (req, res) => {
   console.log(`  Message: ${message}`);
   console.log('─'.repeat(40) + '\n');
 
-  res.json({
-    success: true,
-    message: `Thanks ${name}! Your message has been received. I'll get back to you at ${email} soon! 🚀`
-  });
+  try {
+    // Configure Nodemailer transporter
+    const transporter = nodemailer.createTransport({
+      service: 'gmail', // You can change this to your preferred email service
+      auth: {
+        user: process.env.EMAIL_USER, // Your email address
+        pass: process.env.EMAIL_PASS  // Your app password
+      }
+    });
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: process.env.RECEIVER_EMAIL || process.env.EMAIL_USER, // Use RECEIVER_EMAIL if set, otherwise fallback to sender
+      replyTo: email, // Reply to the person who filled out the form
+      subject: `New Portfolio Contact from ${name}`,
+      text: `You have received a new message from your portfolio website.\n\nName: ${name}\nEmail: ${email}\n\nMessage:\n${message}`,
+      html: `
+        <h3>New Contact Message</h3>
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Message:</strong></p>
+        <p>${message.replace(/\n/g, '<br>')}</p>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.json({
+      success: true,
+      message: `Thanks ${name}! Your message has been received and emailed successfully! 🚀`
+    });
+  } catch (error) {
+    console.error('Error sending email:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to send the email. Please make sure EMAIL_USER and EMAIL_PASS are configured in the .env file.' 
+    });
+  }
 });
 
 // GET health check
